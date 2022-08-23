@@ -1,0 +1,72 @@
+﻿@page "/admin-interests"
+@attribute [Authorize]
+
+@using BitBuddy.Core.Contracts.Domain
+@using BitBuddy.Core.Entities
+@using BitBuddy.Pages.Components
+
+<PageTitle>Admin Interests</PageTitle>
+
+@inject IAdminFeedService _adminFeedService;
+@inject ISnackbar Snackbar
+@inject IHttpContextAccessor _httpContext;
+
+<h3>Admin Interests</h3>
+<div> <span class="mr-2 w-auto">Manage interests!</span></div>
+<br />
+
+@if (isLoading)
+{
+    <p>Loading Application Interests...</p>
+}
+else
+{
+    <div>
+        <h5>Interest categories in the application:</h5>
+        <div class="card">
+            <div class="card-body">
+                @foreach (var i in existingInterests)
+                {
+                    <div class="row">
+                        <div class="col-8"><p> @i.Name </p></div>
+                        <div class="col-2"><i class="fa-solid fa-x" @onclick=" () => DeleteInterest(i.Name)"></i></div>
+                    </div>
+                }
+            </div>
+        </div>
+        <br />
+        <form>
+            <div class="col-6"><label class="form-label"><h5>New interest category</h5></label><input type="text" class="form-control" placeholder="new category" @bind="@category"> </input></div>
+            <div class="mt-5"><button class="btn btn-primary event-button" @onclick="@(async => AddInterest(category))" type="button">Add New Interest Category</button></div>
+        </form>
+    </div>
+}
+
+@code {
+    private Interest newInterest;
+    private List<Interest> existingInterests;
+    private string category;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var userName = _httpContext.HttpContext.User.Identity?.Name;
+
+        newInterest = new Interest();
+        existingInterests = await _adminFeedService.GetInterests();
+
+        isLoading = false;
+    }
+
+    private async Task AddInterest(string category)
+    {
+        newInterest = await _adminFeedService.AddInterest(category);
+        Snackbar.Add("The interest was succesfully added to the list!", Severity.Success);
+        existingInterests.Add(newInterest);
+    }
+    private async void DeleteInterest(string category)
+    {
+        _adminFeedService.DeleteInterest(category);
+        Snackbar.Add("The interest was succesfully deleted from the list!", Severity.Warning);
+    }
+}

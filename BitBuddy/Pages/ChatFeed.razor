@@ -1,0 +1,355 @@
+﻿@page "/chat"
+@attribute [Authorize]
+@using BitBuddy.Core.Contracts.Common
+@using BitBuddy.Core.Contracts.Domain
+@using BitBuddy.Core.Dtos
+@using BitBuddy.Core.Entities
+@using BitBuddy.Core.Services
+@using BitBuddy.Pages.Components
+@using Microsoft.AspNetCore.SignalR
+@using Microsoft.AspNetCore.SignalR.Client
+
+<PageTitle>Chat</PageTitle>
+
+@inject IChatService _chatService;
+@inject IMessageService _messageService;
+@inject IFileUploadService _fileUploadService;
+@inject ISnackbar Snackbar
+@inject IHttpContextAccessor _httpContext;
+@inject IHubContext<ChatHub> _hubContext;
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JsRuntime
+@implements IAsyncDisposable
+
+
+<h3>Chat</h3>
+<div> <span class="mr-2 w-auto">Chat with your friends!</span></div>
+<br />
+
+@if (isLoading)
+{
+    <p>Loading chats...</p>
+}
+else
+{
+    <div class="row">
+        <div class="col-12 row">
+            <div class="col-3">
+                @if (doesNotHaveChats)
+                {
+                    <h4>You have no friends yet!</h4>
+                }
+                else
+                {
+                    <h4>Your chats</h4>
+                    @foreach (var c in existingChats)
+                    {
+                        <div class="card mt-3 @(c.Id == selectedChatId ? "selected": "")" >
+                            <div class=" actions-container d-flex mr-2 mt-2 ">
+                                @if (!c.IsEditButtonVisible)
+                                {
+                                    <i class="fa-solid fa-pencil ml-auto " @onclick=" () => c.IsEditButtonVisible = true"></i>
+                                }
+                                else
+                                {
+                                    <i class="fa-solid fa-x ml-auto" @onclick=" () => c.IsEditButtonVisible = false"></i>
+                                }
+                            </div>
+                            <div class="card-body" @onclick="async () => await GetMessagesForChat(c.Id)">
+                                <h5 hidden="@(c.IsEditButtonVisible)"> @c.Name </h5>
+                                <div hidden="@(!c.IsEditButtonVisible)" class="col-11"><input type="text" class="form-control" placeholder="Chat Name" @bind="@c.Name"></div>
+
+                                <p class="mt-4"> @c.CreationDate </p>
+                            </div>
+
+                            @if (c.IsEditButtonVisible)
+                            {
+                                <div class="d-flex mr-2 mb-2">
+                                    <button class="btn ml-auto btn-primary chat-button" @onclick="@(async () =>  await EditChat(c))" type="button">Save Changes</button>
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+            @if (doesNotHaveChats)
+            {
+            }
+            else
+            {
+                <div class="col-9">
+                    <h4>Your messages</h4>
+                    <div class="messages-container" @ref=ChatRef>
+                        @foreach (var m in existingMessages)
+                        {
+                            @if (m.UserId == userId)
+                            {
+                                <div class="message w-100 row current-user">
+                                    <div class="message-body">
+                                        <div class="row col-12 w-auto">
+                                            <p class="col-8"> You </p>
+                                            <p class="col-4"> @m.Date  </p>
+                                        </div>
+                                        @if (m.PicturePath is null)
+                                        {
+                                            <span> @m.Text </span>
+                                        }
+                                        else
+                                        {
+                                            <img class="chat-img" src="@m.PicturePath" />
+                                        }
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="message w-100 row">
+                                    <div class="message-body">
+                                        <div class="row col-12 w-auto">
+                                            <p class="col-8"> @m.Name </p>
+                                            <p class="col-4"> @m.Date  </p>
+                                        </div>
+
+                                        @if (m.PicturePath is null)
+                                        {
+                                            <span> @m.Text </span>
+                                        }
+                                        else
+                                        {
+                                            <img class="chat-img" src="@m.PicturePath" />
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        }
+                        <br />
+                    </div>
+                    <div class="row col-12 mt-1">
+                        @if (isSendPictureEnabled)
+                        {
+                            <div class="col-3"></div>
+                            <div class="file-input-container col-9">
+                                <InputFile OnChange="@HandleFileSelected" class="" accept="image/*" />
+                                <span class="btn btn-danger" @onclick="() => isSendPictureEnabled = false">
+                                    Cancel
+                                    <i class="fa-solid fa-xmark"></i>
+
+                                </span>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="col-9"><textarea class="form-control" type="text" placeholder="write a message..." @bind="text"> </textarea></div>
+                        }
+                        @if (!isSendPictureEnabled)
+                        {
+                            <div class="col-2 align-self-center">
+                                <button class="btn btn-primary "
+                            @onclick="@(async => CreateMessageInChat(userId, selectedChatId, text))" type="button">
+                                    Send message <i class="fa-solid fa-paper-plane"></i>
+                                </button>
+                            </div>
+
+                            <div class="col-1 align-self-center">
+                                <button class="btn btn-primary "
+                            @onclick="() => isSendPictureEnabled = true" type="button">
+                                    <i class="fa-solid fa-image"></i>
+                                </button>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
+<style>
+    .messages-container {
+        height: calc(100vh - 270px);
+        overflow-x: auto;
+        padding: 0px 10px;
+    }
+    .selected {
+        background-color: aliceblue;
+        box-shadow: 0px 0px 5px 0px;
+    }
+
+    .message {
+        margin-top: 5px;
+    }
+
+    .message-body {
+        border-radius: 6px;
+        padding: 10px;
+        margin-right: auto;
+        background-color: #e6ebff;
+        width: 75% !important;
+    }
+
+        .message-body > span {
+            font-size: 16px;
+        }
+
+    .message.current-user > .message-body {
+        margin-left: auto;
+        margin-right: 0;
+        background-color: lightgreen;
+    }
+
+    .file-input-container {
+        align-items: center;
+        display: grid;
+        grid-template-columns: 8fr 2fr;
+    }
+
+    .chat-img {
+        max-width: 100%;
+    }
+
+    .actions-container{
+        position: absolute;
+        right: 0;
+    }
+</style>
+
+
+@code {
+    private bool isLoading = true;
+    private bool doesNotHaveChats = false;
+    private string userId;
+    private int selectedChatId;
+    private string text;
+    private Message newMessage;
+    private string currentUserName = string.Empty;
+    private bool isSendPictureEnabled = false;
+
+    private List<ChatDto> existingChats;
+    private List<MessageDto> existingMessages;
+
+    public ElementReference ChatRef;
+
+    // hub
+    private HubConnection? hubConnection;
+    public bool IsConnected => hubConnection?.State == HubConnectionState.Connected;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var userName = _httpContext.HttpContext.User.Identity?.Name;
+        userId = await _chatService.GetUserIdByUsername(userName);
+        currentUserName = await _chatService.GetUserFirstNameLastNameByUsername(userName);
+
+        existingChats = await _chatService.GetAllChatsOf(userId);
+        if (existingChats.Count > 0)
+        {
+            selectedChatId = existingChats[0].Id;
+            existingMessages = await _messageService.GetMessagesFromChat(userId, selectedChatId);
+        }
+        else
+        {
+            doesNotHaveChats = true;
+        }
+        isLoading = false;
+
+        // signarR hub
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(NavigationManager.ToAbsoluteUri("/chathub"))
+            .Build();
+
+        hubConnection.On<MessageDto>("ReceiveMessage", (message) =>
+        {
+            if (message.ChatId == selectedChatId)
+            {
+                existingMessages.Add(message);
+                InvokeAsync(StateHasChanged);
+            }
+        });
+
+        await hubConnection.StartAsync();
+        await JoinGroup(selectedChatId.ToString());
+
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await ScrollToBottomOfChat();
+    }
+
+    private async Task CreateMessageInChat(string userId, int chatId, string text)
+    {
+        var message = await _messageService.CreateMessageInChat(userId, chatId, text, currentUserName);
+        await SendMessage(message, chatId.ToString());
+        Snackbar.Add("Message Sent!", Severity.Success);
+    }
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+
+        if (file != null)
+        {
+            await SendPictureMessage(userId, selectedChatId, file);
+            isSendPictureEnabled = false;
+        }
+    }
+
+    private async Task SendPictureMessage(string userId, int chatId, IBrowserFile file)
+    {
+        var message = await _fileUploadService.SendMessageWithPicture(file, userId, chatId, currentUserName);
+        await SendMessage(message, chatId.ToString());
+        Snackbar.Add("Picture Sent!", Severity.Success);
+    }
+
+    private async Task GetMessagesForChat(int chatId)
+    {
+        selectedChatId = chatId;
+        existingMessages = await _messageService.GetMessagesFromChat(userId, chatId);
+        await JoinGroup(chatId.ToString());
+        await ScrollToBottomOfChat();
+    }
+
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
+
+    private async Task SendMessage(MessageDto message, string groupName)
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.SendAsync("SendMessage", message, groupName);
+        }
+        text = "";
+    }
+
+    private async Task JoinGroup(string chatId)
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.SendAsync("JoinGroup", chatId);
+        }
+    }
+
+    private async Task EditChat(ChatDto chat)
+    {
+        await _chatService.EditChat(chat.Name, chat.Id);
+        chat.IsEditButtonVisible = false;
+    }
+
+    //private void DeleteMessage(int messageId)
+    //{
+    //    _messageService.DeleteMessage(messageId);
+    //    Snackbar.Add("You deleted this message.", Severity.Normal);
+
+    //    var messageIndex = existingMessages.FindIndex(x => x.Id == selectedChatId);
+    //    existingMessages.RemoveAt(messageIndex);
+    //}
+
+    private async Task ScrollToBottomOfChat()
+    {
+        await JsRuntime.InvokeVoidAsync("scrollToEnd", new object[] { ChatRef });
+    }
+}

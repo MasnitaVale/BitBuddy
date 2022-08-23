@@ -1,0 +1,90 @@
+﻿@page "/"
+
+@using BitBuddy.Core.Contracts.Domain
+
+<PageTitle>Index</PageTitle>
+
+<div class="site-wrapper">
+    <div class="bg-connnections">
+        <img src=/Uploads/Connections-01.png width="1500px" height="auto" />
+    </div>
+    <div class="site-wrapper-inner">
+        <div class="container">
+            <div class="inner cover">
+                <img src=/Uploads/BitBuddy_Logo_Purple.png width="250px" height="250px" />
+                <p>Make friends and memories!</p>
+                <button class="btn btn-lg btn-default" @onclick="() => isAboutOn = true" type="button">About Bit Buddy</button>
+                @if (isAboutOn)
+                {
+                    <div class="card">
+                        <h2>The Purpose</h2>
+                        <p class="description">
+                            Take a moment to think about your hobbies, we're sure you have plenty!
+                            We aim to find you a partner for those hobbies because we know that they're are meant to be enjoyed with friends.
+                        </p>
+                        <h2>The Specifications</h2>
+                        <p class="description">Bit Buddy is a clean and exciting social-networking platform, which targets the everyday hobby-enthusiat and strives to provide a solution for the interaction problem of the 21th century.  </p>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+
+    .btn-default,
+    .btn-default:hover,
+    .btn-default:focus {
+        color: white;
+        background-color: #4d004d;
+        border: 1px solid #4d004d;
+    }
+
+    html,
+    body {
+        height: 100%;
+    }
+
+    body {
+        color: #000066;
+        text-align: center;
+    }
+
+    .site-wrapper {
+        display: table;
+        width: 100%;
+        height: 600px;
+    }
+
+    .site-wrapper-inner {
+        display: table-cell;
+        vertical-align: top;
+        position: absolute;
+        left: 400px;
+        top: 100px;
+    }
+
+    .card {
+        display: table-cell;
+        background-color: white;
+        width: 500px;
+        padding: 20px;
+        border-width:medium;
+        top: 50px;
+    }
+
+    .description {
+        text-align: justify;
+    }
+
+    .bg-connnections {
+        position: absolute;
+        right: 0px;
+        bottom: 0px;
+    }
+</style>
+
+@code {
+    private bool isAboutOn = false;
+}

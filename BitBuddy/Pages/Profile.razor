@@ -1,0 +1,152 @@
+﻿@page "/profile"
+@attribute [Authorize]
+
+@using BitBuddy.Core.Contracts.Domain
+@using BitBuddy.Core.Entities
+@using BitBuddy.Pages.Components
+
+<PageTitle>Profile</PageTitle>
+
+@inject IProfileService _profileService;
+@inject ISnackbar Snackbar
+@inject IHttpContextAccessor _httpContext;
+@inject IFileUploadService _fileUpload;
+
+
+<h3>Profile</h3>
+<p>Edit your profile and your interests!</p>
+
+
+@if (CurrentUser is null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <div class="container rounded bg-white mt-5 mb-5">
+        <div class="row">
+            <div class="col-md-3 border-right">
+                <div class="d-flex profile-pic-container flex-column align-items-center text-center p-3 py-5">
+                    @if (!isProfilePicEditEnabled)
+                    {
+                        <i class="fa-solid fa-pencil" @onclick="() => isProfilePicEditEnabled = true"></i>
+                    }
+                    else
+                    {
+                        <i class="fa-solid fa-xmark" @onclick="() => isProfilePicEditEnabled = false"></i>
+                    }
+                    @if (CurrentUser.ProfilePicturePath is null)
+                    {
+                        <img class="rounded-circle mt-5 object-fit-cover" height="175px" max-width="175px" src="https://st3.depositphotos.com/15648834/17930/v/600/depositphotos_179308454-stock-illustration-unknown-person-silhouette-glasses-profile.jpg">
+                    }
+                    else
+                    {
+                        <img class="rounded-circle mt-5 object-fit-cover" height="175px" width="175px" src="@CurrentUser.ProfilePicturePath">
+                    }
+                    @if (isProfilePicEditEnabled)
+                    {
+                        <InputFile OnChange="@HandleFileSelected" class="file-input-profile" accept="image/*" />
+                    }
+                </div>
+            </div>
+            <div class="col-md-5 border-right">
+                <div class="p-3 py-5">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h4 class="text-right">Profile Settings</h4>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-md-6"><label class="form-label">First name</label><input type="text" class="form-control" disabled value="@CurrentUser.FirstName" placeholder="first name"></div>
+                        <div class="col-md-6"><label class="form-label">Last name</label><input type="text" class="form-control" disabled value="@CurrentUser.LastName" placeholder="last name"></div>
+                        <div class="col-md-12"><label class="form-label">Mobile Number</label><input type="text" class="form-control" disabled value="@CurrentUser.PhoneNumber" placeholder="phone number"></div>
+                        <div class="col-md-12"><label class="form-label">Username</label><input type="text" class="form-control" disabled value="@CurrentUser.UserName" placeholder="username"></div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-md-12"><label class="form-label">Nick Name</label><input type="text" class="form-control" placeholder="enter your nickname" @bind="@CurrentUser.NickName"></div>
+                        <div class="col-md-12"><label class="form-label">Age</label><input type="number" min="14" max="99" class="form-control" placeholder="enter your age" @bind="@CurrentUser.Age"></div>
+                        <div class="col-md-12"><label class="form-label">Studies</label><input type="text" class="form-control" placeholder="enter your university" @bind="@CurrentUser.Studies"></div>
+                        <div class="col-md-12"><label class="form-label">Location</label><input type="text" class="form-control" placeholder="enter your city" @bind="@CurrentUser.Location"></div>
+                        <div class="col-md-12"><label class="form-label">Introduction</label><input type="text" class="form-control" placeholder="enter an introduction" @bind="@CurrentUser.Introduction"></div>
+                        <div class="col-md-12">
+                            <MudSelect T="Interest" Label="Interests" ToStringFunc="@converter" MultiSelection="true" @bind-Value="initialValue" @bind-SelectedValues="SelectedInterests">
+                                @foreach (var i in Interests)
+                                {
+                                    <MudSelectItem T="Interest" Value="@i">@i.Name</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </div>
+                    </div>
+
+                    <div class="mt-5 text-center"><button class="btn btn-primary profile-button" @onclick="EditProfile" type="button">Save Profile</button></div>
+                </div>
+
+
+            </div>
+
+
+        </div>
+    </div>
+}
+
+<style>
+    .object-fit-cover {
+        object-fit: cover;
+    }
+
+    .profile-pic-container {
+        position: relative;
+    }
+
+        .profile-pic-container > i {
+            position: absolute;
+            top: 50px;
+            font-size: 22px;
+            right: 25px;
+        }
+
+        .file-input-profile{
+            align-self: center;
+            width: 200px;
+        }
+
+</style>
+
+@code {
+
+    private ApplicationUser CurrentUser;
+    private List<Interest>? Interests;
+    private IEnumerable<Interest> SelectedInterests { get; set; } = new List<Interest>() { };
+    private Interest initialValue { get; set; }
+    private bool isProfilePicEditEnabled = false;
+    IBrowserFile file;
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        var userName = _httpContext.HttpContext.User.Identity?.Name;
+        CurrentUser = await _profileService.GetCurrentUser(userName);
+
+        Interests = await _profileService.GetInterests();
+        SelectedInterests = CurrentUser.UserInterests.Select(x => x.Interest).ToList();
+    }
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        file = e.File;
+
+        if (file != null)
+        {
+            await _fileUpload.UploadUserProfilePicture(file, CurrentUser.Id);
+            isProfilePicEditEnabled = false;
+        }
+    }
+
+    private async Task EditProfile()
+    {
+        CurrentUser.UserInterests = SelectedInterests.Select(x => new UserInterest { UserId = CurrentUser.Id, InterestId = x.Id }).ToList();
+        CurrentUser = await _profileService.EditUser(CurrentUser);
+        Snackbar.Add("The profile was succesfully updated!", Severity.Success);
+    }
+
+    Func<Interest, string> converter = p => p?.Name;
+
+}

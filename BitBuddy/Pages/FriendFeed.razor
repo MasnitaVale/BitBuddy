@@ -1,0 +1,175 @@
+﻿@page "/friend-feed"
+@attribute [Authorize]
+
+@using BitBuddy.Core.Contracts.Domain
+@using BitBuddy.Core.Dtos
+@using BitBuddy.Core.Entities
+@using BitBuddy.Pages.Components
+
+<PageTitle>Friend Feed</PageTitle>
+
+@inject IFriendFeedService _friendFeedService;
+@inject IProfileService _profileService;
+@inject ISnackbar Snackbar
+@inject IHttpContextAccessor _httpContext;
+
+<h3>Friends Feed</h3>
+<div> <span class="mr-2 w-auto">Match with people, find new friends!</span></div>
+<br />
+
+@if (isLoading)
+{
+    <p>Loading friends...</p>
+}
+else
+{
+    <div class="row">
+        <div class="col">
+            <h4>Your friends</h4>
+            @foreach (var f in friends)
+            {
+                <div class="card">
+                    <div class="card-header"><h5> @f.FirstName @f.LastName </h5></div>
+                    <div class="row card-body d-flex">
+                        <div class="col-9 m-lg-auto">
+                            <p><label>Nickname:</label> @f.NickName </p>
+                            <p><label>Studies:</label> @f.Studies </p>
+                            <p><label>Residence:</label> @f.Location </p>
+                            <p><label>Age:</label> @f.Age </p>
+                            @if (f.UserInterests is not null)
+                            {
+                                @foreach (var i in f.UserInterests.Select(x => x.Interest).ToList())
+                                {
+                                    <span class="badge bg-secondary mr-1">@i.Name</span>
+                                }
+                            }
+                        </div>
+                        <div class="col-3 m-lg-auto">
+                            @if (f.ProfilePicturePath != null)
+                            {
+                                <img class="rounded-circle object-fit-cover" height="175px" width="175px" src=@f.ProfilePicturePath />
+                            }
+                        </div>
+                    </div>
+                    <div class="d-flex card-footer"><button class="ml-auto mr-auto btn btn-secondary remove-friend-button" @onclick="@(async => RemoveFriend(f.Id))" type="button">Unfriend</button></div>
+                </div>
+                <br />
+            }
+        </div>
+        <div class="col">
+            <h4>Your friend suggestions</h4>
+
+            @foreach (var f in matchingSuggestions)
+            {
+                <div class="card">
+                    <div class="card-header"><h5> @f.FirstName @f.LastName </h5></div>
+                    <div class="row card-body">
+                        <div class="col-9">
+                            <p><label>Nickname:</label> @f.NickName </p>
+                            <p><label>Studies:</label> @f.Studies </p>
+                            <p><label>Residence:</label> @f.Location </p>
+                            <p><label>Age:</label> @f.Age </p>
+                            <p><label>Introduction:</label> @f.Introduction </p>
+                            @if (f.UserInterests is not null)
+                            {
+                                @foreach (var i in f.UserInterests.Select(x => x.Interest).ToList())
+                                {
+                                    <span class="badge bg-secondary mr-1">@i.Name</span>
+                                }
+                            }
+                        </div>
+                        <div class="col-3">
+                            @if (f.ProfilePicturePath != null)
+                            {
+                                <img class="rounded-circle object-fit-cover align-content-end" height="175px" width="175px" src=@f.ProfilePicturePath />
+                            }
+                        </div>
+                        <div class="card-footer mt-6">
+                            <div class="row mt-4">
+                                <div class="col-4 d-flex"><button class="mr-auto btn btn-danger" @onclick="@(async => SendMatchingResponse(f, MatchingStatus.Rejected))" type="button">Ignore <i class="fa-solid fa-x"></i></button></div>
+                                <div class="col-4 d-flex"><button class="mx-auto btn btn-success" @onclick="@(async => SendMatchingResponse(f, MatchingStatus.Accepted))" type="button">Match <i class="fa-solid fa-check"></i></button></div>
+                                @if (f.IsReportBoxVisible)
+                                {
+                                    <div class="col-12 mt-3"><label class="form-label">Report Reason:</label><textarea type="text" class="form-control" placeholder="report reason" @bind="@description"></textarea></div>
+                                    <div class="mt-5 text-center"><button class="btn btn-primary event-button" @onclick="@(async => ReportUser(f.Id, description))" type="button">Send Report</button></div>
+                                    <div class="col-12 d-flex"><button class="ml-auto btn btn-secondary" @onclick="() => f.IsReportBoxVisible = false" type="button">Cancel <i class="fa-solid fa-xmark"></i></button></div>
+                                }
+                                @if (!f.IsReportBoxVisible)
+                                {
+                                    <div class="col-4 d-flex"><button class="ml-auto btn btn-warning" @onclick="() => f.IsReportBoxVisible = true" type="button">Report <i class="fa-solid fa-flag"></i></button></div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <br />
+            }
+        </div>
+    </div>
+}
+<style>
+    .card-header {
+        background-color: #FFFFE0;
+        padding-top: 15px;
+    }
+
+    .label {
+        font-style: italic;
+    }
+</style>
+
+@code {
+    private bool isLoading = true;
+    private string userId;
+    private string friendId;
+    //private bool displayReportTab = false;
+    private string description;
+
+    private ApplicationUser newFriend;
+    private List<ApplicationUser> friends;
+    private List<AppUserSuggestionDto> matchingSuggestions;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var userName = _httpContext.HttpContext.User.Identity?.Name;
+        userId = await _friendFeedService.GetUserIdByUsername(userName);
+
+        friends = await _friendFeedService.GetFriends(userId);
+        matchingSuggestions = await _friendFeedService.GetMatchingSuggestions(userId);
+        isLoading = false;
+    }
+
+    private void RemoveFriend(string friendId)
+    {
+        _friendFeedService.RemoveFriend(userId, friendId);
+        Snackbar.Add("You unfriended this user.", Severity.Normal);
+
+        var friendIndex = friends.FindIndex(x => x.Id == friendId);
+        friends.RemoveAt(friendIndex);
+    }
+
+    private async Task SendMatchingResponse(AppUserSuggestionDto friend, MatchingStatus status)
+    {
+        bool isMatch = await _friendFeedService.SendMatchingResponse(userId, friend.Id, status);
+        if (isMatch)
+        {
+            Snackbar.Add("Yay, it's a match!", Severity.Success);
+            friends.Add(friend);
+        }
+        else
+        {
+            Snackbar.Add("Wait for their decision!", Severity.Info);
+        }
+        matchingSuggestions.Remove(friend);
+
+    }
+    private async Task ReportUser(string friendId, string description)
+    {
+        await _friendFeedService.ReportUser(friendId, description);
+        Snackbar.Add("You reported this user.", Severity.Warning);
+
+        var reportedUserId = matchingSuggestions.FindIndex(x => x.Id == friendId);
+        matchingSuggestions.RemoveAt(reportedUserId);
+
+    }
+}

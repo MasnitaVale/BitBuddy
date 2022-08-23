@@ -1,0 +1,78 @@
+﻿@page "/admin-reports"
+@attribute [Authorize]
+
+@using BitBuddy.Core.Contracts.Domain
+@using BitBuddy.Core.Entities
+@using BitBuddy.Pages.Components
+
+<PageTitle>Admin Reports</PageTitle>
+
+@inject IAdminFeedService _adminFeedService;
+@inject ISnackbar Snackbar
+@inject IHttpContextAccessor _httpContext;
+
+<h3>Admin Reports</h3>
+<div> <span class="mr-2 w-auto">Manage user reports!</span></div>
+<br />
+
+@if (isLoading)
+{
+    <p>Loading Admin Reports...</p>
+}
+else
+{
+    <div>
+        <h5>User Reports:</h5>
+        @foreach (var r in existingReports)
+        {
+            <div class="card">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-8">
+                            <p><label>The reported user: </label><strong> @r.User.Email</strong></p>
+                            <p><label>Report reason: </label><strong> @r.ReasonDescription</strong></p>
+                        </div>
+                        <div class="col-2">
+                            <i class="fa-solid fa-x" @onclick=" async () => await DeleteUser(r.User.Id)"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+    <br />
+    <div>
+        <h5>Application Users:</h5>
+        @foreach (var u in existingUsers)
+        {
+            <div class="card col-12">
+                <div class="card-body">
+                    <p><label>Firstname of the user: </label><strong>@u.FirstName</strong> </p>
+                    <p><label>Lastname of the user: </label><strong>@u.LastName</strong> </p>
+                    <p><label>Email of the user: </label><strong>@u.Email</strong> </p>
+                </div>
+            </div>
+        }
+    </div>
+
+}
+
+@code {
+    private List<Report> existingReports;
+    private List<ApplicationUser> existingUsers;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        existingReports = await _adminFeedService.GetReports();
+        existingUsers = await _adminFeedService.GetAll();
+        isLoading = false;
+    }
+
+    private async Task DeleteUser(string userId)
+    {
+        await _adminFeedService.DeleteUser(userId);
+        existingReports = await _adminFeedService.GetReports();
+        Snackbar.Add("The reported user was succesfully deleted!", Severity.Warning);
+    }
+}

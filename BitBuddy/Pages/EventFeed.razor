@@ -1,0 +1,193 @@
+﻿@page "/event-feed"
+@attribute [Authorize]
+
+@using BitBuddy.Core.Contracts.Domain
+@using BitBuddy.Core.Entities
+@using BitBuddy.Pages.Components
+
+<PageTitle>Event Feed</PageTitle>
+
+@inject IEventFeedService _eventFeedService;
+@inject ISnackbar Snackbar
+@inject IHttpContextAccessor _httpContext;
+
+<h3>Event Feed</h3>
+<div class="row">
+    <span class="mr-2 w-auto">Find out about the latest events or create your own!</span>
+
+    @if (!displayCreationForm)
+    {
+        <i class="oi oi-plus w-auto mr-auto cursos-pointer" @onclick="() => displayCreationForm = true"> </i>
+    }
+</div>
+
+@if (suggestedEvents is null)
+{
+    <p>Loading events...</p>
+}
+else
+{
+    @if (displayCreationForm)
+    {
+        <div class="row">
+            <i class="oi oi-x w-auto ml-auto" @onclick="() => displayCreationForm = false"> </i>
+        </div>
+        <form>
+            <div class="row col-12">
+                <div class="col-6"><label class="form-label">Event name</label><input type="text" class="form-control" placeholder="event name" @bind="@newEvent.Name"></div>
+                <div class="col-6"><label class="form-label">Event date (MM/dd/yy) and Time (hh/mm/ss) </label><input type="datetime" class="form-control" placeholder="event date" @bind="@newEvent.EventDate"></div>
+            </div>
+            <div class="row col-12 mt-2">
+                <div class="col-6"><label class="form-label">Location</label><input type="text" class="form-control" placeholder="location" @bind="@newEvent.Location"></div>
+                <div class="col-6">
+                    <MudSelect T="Interest" Label="Category" ToStringFunc="@converter" MultiSelection="true" @bind-Value="initialValue" @bind-SelectedValues="selectedInterests">
+                        @foreach (var i in interests)
+                        {
+                            <MudSelectItem T="Interest" Value="@i">@i.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </div>
+            </div>
+            <div class="col-6 mt-2"><label class="form-label">Description</label><textarea type="text" class="form-control" placeholder="description" @bind="@newEvent.Description"> </textarea></div>
+            <div class="mt-5 text-center"><button class="btn btn-primary event-button" @onclick="AddEvent" type="button">Add Event</button></div>
+        </form>
+    }
+    <br />
+
+    <div class="row">
+        <div class="col">
+            <h4>Your Events</h4>
+            @foreach (var e in createdEvents)
+            {
+                <div class="card">
+                    <div class="card-header"> <h5> @e.Name </h5></div>
+                    <div class="card-body">
+                        <p><label>Event date:</label> @e.EventDate </p>
+                        <p><label>Event creation date:</label> @e.CreationDate </p>
+                        <p><label>Description:</label> @e.Description </p>
+                        <p><label>Location:</label> @e.Location </p>
+                        @if (e.EventInterests is not null)
+                            @foreach (var i in e.EventInterests.Select(x => x.Interest).ToList())
+                            {
+                                <span class="badge bg-secondary mr-1">@i.Name</span>
+                            }
+                    </div>
+                </div>
+
+                <br />
+            }
+        </div>
+        <div class="col">
+            <h4>Suggested Events</h4>
+            @foreach (var e in suggestedEvents)
+            {
+                <div class="card">
+                   <div class="card-header"> <h5> @e.Name </h5></div>
+                    <div class="card-body">
+                        <p><label>Event date:</label> @e.EventDate </p>
+                        <p><label>Description:</label> @e.Description </p>
+                        <p><label>Location:</label> @e.Location </p>
+                        @if (e.EventInterests is not null)
+                            @foreach (var i in e.EventInterests.Select(x => x.Interest).ToList())
+                            {
+                                <span class="badge bg-secondary mr-1">@i.Name</span>
+                            }
+                        <div class="mt-5"><button class="btn btn-primary place-center event-button" @onclick="@(async => RegisterUserToEvent(e.Id))" type="button">Participate!</button></div>
+                    </div>
+                </div>
+
+                <br />
+            }
+        </div>
+        <div class="col">
+            <h4>Upcoming Events</h4>
+            @foreach (var e in upcomingEvents)
+            {
+                <div class="card">
+                    <div class="card-header"> <h5> @e.Name </h5></div>
+                    <div class="card-body">
+                        <p><label>Event date:</label> @e.EventDate </p>
+                        <p><label>Description:</label> @e.Description </p>
+                        <p><label>Location:</label> @e.Location </p>
+                        @if (e.EventInterests is not null)
+                            @foreach (var i in e.EventInterests.Select(x => x.Interest).ToList())
+                            {
+                                <span class="badge bg-secondary mr-1">@i.Name</span>
+                            }
+                    </div>
+                </div>
+
+                <br />
+            }
+        </div>
+    </div>
+}
+
+<style>
+    .card-header {
+        background-color: #FFFFE0;
+        padding-top: 15px;
+    }
+</style>
+
+@code {
+    private string userId;
+
+    private List<Event> suggestedEvents;
+    private List<Event> createdEvents;
+    private List<Event> upcomingEvents;
+    private Event newEvent;
+
+
+    //Mudblazor
+    private List<Interest>? interests;
+    private IEnumerable<Interest> selectedInterests { get; set; } = new List<Interest>() { };
+    private Interest initialValue { get; set; }
+
+    private bool displayCreationForm = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var userName = _httpContext.HttpContext.User.Identity?.Name;
+        userId = await _eventFeedService.GetUserIdByUsername(userName);
+
+        newEvent = new Event();
+        newEvent.EventDate = DateTime.UtcNow;
+
+        suggestedEvents = await _eventFeedService.GetSuggestedEvents(userId);
+        createdEvents = await _eventFeedService.GetCreatedEvents(userId);
+        upcomingEvents = await _eventFeedService.GetUpcomingEvents(userId);
+
+        interests = await _eventFeedService.GetInterests();
+        selectedInterests = new List<Interest>();
+    }
+
+    private async Task AddEvent()
+    {
+        newEvent.EventInterests = selectedInterests.Select(x => new EventInterest { EventId = newEvent.Id, InterestId = x.Id }).ToList();
+        var addedEvent = await _eventFeedService.AddEvent(userId, newEvent);
+        Snackbar.Add("The event was succesfully created!", Severity.Success);
+        //suggestedEvents.Add(addedEvent);
+        createdEvents.Add(addedEvent);
+        upcomingEvents.Add(addedEvent);
+
+        newEvent = new Event();
+        newEvent.EventDate = DateTime.UtcNow;
+        selectedInterests = new List<Interest>() { };
+        displayCreationForm = false;
+    }
+
+    private async Task RegisterUserToEvent(int eventId)
+    {
+        await _eventFeedService.RegisterUserToEvent(userId, eventId);
+        //TODO remove from middle move left
+        Snackbar.Add("You succesfully registered to the event!", Severity.Success);
+
+        var eventIndex = suggestedEvents.FindIndex(x => x.Id == eventId);
+        suggestedEvents.RemoveAt(eventIndex);
+
+    }
+
+    Func<Interest, string> converter = p => p?.Name;
+
+}
